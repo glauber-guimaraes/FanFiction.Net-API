@@ -5,3 +5,8 @@ An unofficial, passive API to [FanFiction.Net](http://www.fanfiction.net/). The 
 Dependencies
 ------------
 * [BeautifulSoup 4](http://www.crummy.com/software/BeautifulSoup/)
+* [html5lib](http://code.google.com/p/html5lib/) or [lxml](http://lxml.de/)
+
+Contributors
+------------
+* jabagawee (Andrew Szeto)
