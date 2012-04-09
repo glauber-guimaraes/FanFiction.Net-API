@@ -3,19 +3,19 @@ import urllib2
 
 import bs4
 
-parser = None
+_parser = None
 try:
     # This isn't lxml for now (even though its faster) because using it as a
     # parser is still untested and I'm unsure if it would yield identical
     # results to html5lib.
     import html5lib
-    parser = 'html5lib'
+    _parser = 'html5lib'
 except ImportError:
     # Don't catch the ImportError: if neither htm5lib nor lxml are available
     # crash ungracefully. The fallback option used by BeautifulSoup 4
     # (HTMLParser) isn't able to handle the HTML (thanks jabagawee!)
     import lxml
-    parser = 'lxml'
+    _parser = 'lxml'
 
 
 _STORYID_REGEX = r"var\s+storyid\s*=\s*(\d+);"
@@ -149,7 +149,7 @@ class Chapter(object):
         self.number = _parse_integer(_CHAPTER_REGEX, source)
         self.story_text_id = _parse_integer(_STORYTEXTID_REGEX, source)
 
-        soup = bs4.BeautifulSoup(source, parser)
+        soup = bs4.BeautifulSoup(source, _parser)
         select = soup.find('select', {'name': 'chapter'})
         if select:
             # There are multiple chapters available, use chapter's title
