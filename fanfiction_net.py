@@ -1,4 +1,5 @@
 import re
+import urllib
 import urllib2
 
 import bs4
@@ -19,21 +20,11 @@ except ImportError:
 
 
 _STORYID_REGEX = r"var\s+storyid\s*=\s*(\d+);"
-_CHAPTER_REGEX = r"var\s+chapter\s*=\s*(\d+);"
-_CHAPTERS_REGEX = r"var\s+chapters\s*=\s*(\d+);"
-_WORDS_REGEX = r"var\s+words\s*=\s*(\d+);"
 _USERID_REGEX = r"var\s+userid\s*=\s*(\d+);"
+# Current form is temporary due to "var storytextid = storytextid=29608487;"
+_STORYTEXTID_REGEX = r"storytextid=(\d+);"
+_CHAPTER_REGEX = r"var\s+chapter\s*=\s*(\d+);"
 _TITLE_REGEX = r"var\s+title\s*=\s*'(.+)';"
-_TITLE_T_REGEX = r"var\s+title_t\s*=\s*'(.+)';"
-_SUMMARY_REGEX = r"var\s+summary\s*=\s*'(.+)';"
-_CATEGORYID_REGEX = r"var\s+categoryid\s*=\s*(\d+);"
-_CAT_TITLE_REGEX = r"var\s+cat_title\s*=\s*'(.+)';"
-_DATEP_REGEX = r"var\s+datep\s*=\s*'(.+)';"
-_DATEU_REGEX = r"var\s+dateu\s*=\s*'(.+)';"
-_AUTHOR_REGEX = r"var\s+author\s*=\s*'(.+)';"
-
-# Useful for generating a review URL later on
-_STORYTEXTID_REGEX = r"var\s+review_url\s*=\s*'.*storytextid=(\d+)';"
 
 # Used to parse the attributes which aren't directly contained in the
 # JavaScript and hence need to be parsed manually
@@ -72,23 +63,19 @@ class Story(object):
         # Easily parsable and directly contained in the JavaScript, lets hope
         # that doesn't change or it turns into something like below
         self.id = _parse_integer(_STORYID_REGEX, source)
-        self.number_chapters = _parse_integer(_CHAPTERS_REGEX, source)
-        self.number_words = _parse_integer(_WORDS_REGEX, source)
         self.author_id = _parse_integer(_USERID_REGEX, source)
-        self.title = _unescape_javascript_string(_parse_string(_TITLE_T_REGEX, source))
-        self.summary = _unescape_javascript_string(_parse_string(_SUMMARY_REGEX, source))
-        self.category_id = _parse_integer(_CATEGORYID_REGEX, source)
-        self.category = _unescape_javascript_string(_parse_string(_CAT_TITLE_REGEX, source))
-        self.date_published = _parse_string(_DATEP_REGEX, source)
-        self.date_updated = _parse_string(_DATEU_REGEX, source)
-        self.author = _unescape_javascript_string(_parse_string(_AUTHOR_REGEX, source))
+        self.title = urllib.unquote_plus(_parse_string(_TITLE_REGEX, source))
+
+        soup = bs4.BeautifulSoup(source)
+        self.author = soup.find('a', href=lambda href: '/u/' in href).string
+        self.category = soup('a', {'class': 'xcontrast_txt'})[1].string
 
         # Tokens of information that aren't directly contained in the
         # JavaScript, need to manually parse and filter those
-        tokens = [token.strip() for token in re.sub(_HTML_TAG_REGEX, '', _parse_string(_NON_JAVASCRIPT_REGEX, source)).split('-')]
+        tokens = [token.strip() for token in re.sub(_HTML_TAG_REGEX, '', _parse_string(_NON_JAVASCRIPT_REGEX, source)).split(' - ')]
 
         # Both tokens are constant and always available
-        self.rated = tokens[0]
+        self.rated = tokens[0].split()[1]
         self.language = tokens[1]
 
         # After those the remaining tokens are uninteresting and looking for
@@ -115,15 +102,28 @@ class Story(object):
         else:
             self.characters = tokens[2]
 
+        self.reviews = 0
+        self.date_updated = None
         for token in tokens:
             if token.startswith('Reviews: '):
                 # Replace comma in case the review count is greater than 9999
                 self.reviews = int(token.split()[1].replace(',', ''))
-                break
-        else:
-            # "Reviews: " wasn't found and for-loop not broken, hence no (0)
-            # reviews
-            self.reviews = 0
+            elif token.startswith('Words: '):
+                # Replace comma in case the review count is greater than 9999
+                self.number_words = int(token.split()[1].replace(',', ''))
+            elif token.startswith('Chapters: '):
+                self.number_chapters = int(token.split()[1])
+            elif token.startswith('Updated: '):
+                print token
+                self.date_updated = token.split()[1]
+            elif token.startswith('Published: '):
+                print token
+                self.date_published = token.split()[1]
+
+        # In case the story was never updated simply use the publication date
+        # for compatibility reasons.
+        if not self.date_updated:
+            self.date_updated = self.date_published
 
         # Status is directly contained in the tokens as a single-string
         if 'Complete' in tokens:
@@ -150,17 +150,15 @@ class Chapter(object):
         self.story_text_id = _parse_integer(_STORYTEXTID_REGEX, source)
 
         soup = bs4.BeautifulSoup(source, _parser)
-        select = soup.find('select', {'name': 'chapter'})
+        select = soup.find('select', id='chap_select')
         if select:
             # There are multiple chapters available, use chapter's title
             self.title = select.find('option', selected=True).string.split(None, 1)[1]
         else:
             # No multiple chapters, one-shot or only a single chapter released
             # until now; for the lack of a proper chapter title use the story's
-            self.title = _unescape_javascript_string(_parse_string(_TITLE_T_REGEX, source)).decode()
+            self.title = self.title = urllib.unquote_plus(_parse_string(_TITLE_REGEX, source))
         soup = soup.find('div', id='storytext')
-        # Remove AddToAny share buttons
-        soup.find('div', {'class': lambda class_: class_ and 'a2a_kit' in class_}).extract()
         # Normalize HTML tag attributes
         for hr in soup('hr'):
             del hr['size']
