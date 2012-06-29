@@ -68,7 +68,13 @@ class Story(object):
 
         soup = bs4.BeautifulSoup(source)
         self.author = soup.find('a', href=lambda href: '/u/' in href).string
-        self.category = soup('a', {'class': 'xcontrast_txt'})[1].string
+
+        elements = soup('a', {'class': 'xcontrast_txt'})
+        if len(elements) == 1:
+            # Story is a crossover story, no specific category section.
+            self.category = elements[0].string
+        else:
+            self.category = elements[1].string
 
         # Tokens of information that aren't directly contained in the
         # JavaScript, need to manually parse and filter those
