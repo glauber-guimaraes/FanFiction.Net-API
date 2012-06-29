@@ -114,10 +114,8 @@ class Story(object):
             elif token.startswith('Chapters: '):
                 self.number_chapters = int(token.split()[1])
             elif token.startswith('Updated: '):
-                print token
                 self.date_updated = token.split()[1]
             elif token.startswith('Published: '):
-                print token
                 self.date_published = token.split()[1]
 
         # In case the story was never updated simply use the publication date
